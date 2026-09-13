@@ -84,6 +84,15 @@ h2 { margin: 0 0 12px; font-size: 1.3rem; text-wrap: balance; }
 p { line-height: 1.55; color: var(--ink); }
 .muted { color: var(--ink-soft); font-size: 0.92rem; }
 
+.puzzle-image {
+  display: block;
+  width: 100%;
+  max-height: 260px;
+  object-fit: cover;
+  border-radius: 12px;
+  margin-bottom: 12px;
+}
+
 .team-list { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
 .team-list button {
   padding: 16px;

@@ -95,22 +95,25 @@
       return;
     }
 
-    const { data: puzzle, error: puzzleError } = await client
-      .from("puzzles")
-      .select("title, riddle_text, location_hint, code")
+    const { data: route, error: routeError } = await client
+      .from("team_routes")
+      .select("code, location:locations(title, riddle_text, location_hint, image_url)")
+      .eq("team_id", teamId)
       .eq("order_index", step)
-      .or(`team_id.eq.${teamId},team_id.is.null`)
       .maybeSingle();
 
-    if (puzzleError || !puzzle) {
+    if (routeError || !route) {
       app.innerHTML = `<div class="card"><p class="feedback error">Step not found right now, try again or let the organizer know.</p></div>`;
       return;
     }
+
+    const puzzle = route.location;
 
     app.innerHTML = `
       <div class="card">
         <p class="eyebrow">Step ${step} / ${TOTAL_STEPS}</p>
         <h2>${puzzle.title}</h2>
+        ${puzzle.image_url ? `<img src="${puzzle.image_url}" alt="" class="puzzle-image" />` : ""}
         <p>${puzzle.riddle_text}</p>
         ${puzzle.location_hint ? `<p class="muted">${puzzle.location_hint}</p>` : ""}
         <form id="code-form">
@@ -129,7 +132,7 @@
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const entered = input.value.trim().toUpperCase();
-      const expected = puzzle.code.trim().toUpperCase();
+      const expected = route.code.trim().toUpperCase();
       if (!entered) return;
 
       if (entered !== expected) {
@@ -167,11 +170,11 @@
     app.innerHTML = `<div class="center-note">Loading progress…</div>`;
     const myTeamId = getMyTeamId();
 
-    const [{ data: teams, error: teamsError }, { data: puzzles, error: puzzlesError }] = await Promise.all([
+    const [{ data: teams, error: teamsError }, { data: routes, error: routesError }] = await Promise.all([
       client.from("teams").select("id, name").order("id"),
-      client.from("puzzles").select("team_id, order_index, location_key, location_name"),
+      client.from("team_routes").select("team_id, order_index, location_id, location:locations(location_name)"),
     ]);
-    if (teamsError || puzzlesError) {
+    if (teamsError || routesError) {
       app.innerHTML = `<div class="card"><p class="feedback error">Couldn't load the progress.</p></div>`;
       return;
     }
@@ -186,25 +189,25 @@
 
     const rowsEl = document.getElementById("progress-rows");
 
-    function currentPuzzleFor(teamId, stepIndex) {
-      return puzzles.find(p => p.order_index === stepIndex && (p.team_id === teamId || p.team_id === null));
+    function currentRouteFor(teamId, stepIndex) {
+      return routes.find(r => r.team_id === teamId && r.order_index === stepIndex);
     }
 
-    function knownLocationsFor(teamId, stepIndex) {
-      const keys = new Set();
-      for (const p of puzzles) {
-        if ((p.team_id === teamId || p.team_id === null) && p.order_index < stepIndex && p.location_key) {
-          keys.add(p.location_key);
+    function knownLocationIdsFor(teamId, stepIndex) {
+      const ids = new Set();
+      for (const r of routes) {
+        if (r.team_id === teamId && r.order_index < stepIndex) {
+          ids.add(r.location_id);
         }
       }
-      return keys;
+      return ids;
     }
 
     async function draw() {
       const { data: rows } = await client.from("team_progress").select("team_id, current_index");
       const byTeam = Object.fromEntries((rows || []).map(r => [r.team_id, r.current_index]));
       const myStep = byTeam[myTeamId] ?? 1;
-      const myKnownLocations = knownLocationsFor(myTeamId, myStep);
+      const myKnownLocationIds = knownLocationIdsFor(myTeamId, myStep);
 
       rowsEl.innerHTML = teams.map(t => {
         const stepRaw = byTeam[t.id] ?? 1;
@@ -214,10 +217,10 @@
 
         let hint = "";
         if (stepRaw <= TOTAL_STEPS) {
-          const targetPuzzle = currentPuzzleFor(t.id, stepRaw);
-          const alreadyKnown = targetPuzzle && targetPuzzle.location_key && myKnownLocations.has(targetPuzzle.location_key);
-          if (alreadyKnown && targetPuzzle.location_name) {
-            hint = `<div class="progress-hint">📍 ${targetPuzzle.location_name}</div>`;
+          const targetRoute = currentRouteFor(t.id, stepRaw);
+          const alreadyKnown = targetRoute && myKnownLocationIds.has(targetRoute.location_id);
+          if (alreadyKnown && targetRoute.location && targetRoute.location.location_name) {
+            hint = `<div class="progress-hint">📍 ${targetRoute.location.location_name}</div>`;
           }
         }
 
