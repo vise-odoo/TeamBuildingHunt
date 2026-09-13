@@ -12,6 +12,8 @@ create table if not exists puzzles (
   title text not null,
   riddle_text text not null,
   location_hint text,
+  location_name text,
+  location_key text,
   code text not null,
   unlock_text text not null
 );
@@ -40,6 +42,11 @@ create policy "progress_public_read" on team_progress
 
 create policy "progress_public_update" on team_progress
   for update using (true) with check (true);
+
+grant usage on schema public to anon, authenticated;
+grant select on teams to anon, authenticated;
+grant select on puzzles to anon, authenticated;
+grant select, update on team_progress to anon, authenticated;
 
 -- Enables realtime tracking of team_progress
 alter publication supabase_realtime add table team_progress;

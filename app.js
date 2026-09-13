@@ -165,9 +165,13 @@
 
   async function renderProgressView() {
     app.innerHTML = `<div class="center-note">Loading progress…</div>`;
+    const myTeamId = getMyTeamId();
 
-    const { data: teams, error: teamsError } = await client.from("teams").select("id, name").order("id");
-    if (teamsError) {
+    const [{ data: teams, error: teamsError }, { data: puzzles, error: puzzlesError }] = await Promise.all([
+      client.from("teams").select("id, name").order("id"),
+      client.from("puzzles").select("team_id, order_index, location_key, location_name"),
+    ]);
+    if (teamsError || puzzlesError) {
       app.innerHTML = `<div class="card"><p class="feedback error">Couldn't load the progress.</p></div>`;
       return;
     }
@@ -182,18 +186,48 @@
 
     const rowsEl = document.getElementById("progress-rows");
 
+    function currentPuzzleFor(teamId, stepIndex) {
+      return puzzles.find(p => p.order_index === stepIndex && (p.team_id === teamId || p.team_id === null));
+    }
+
+    function knownLocationsFor(teamId, stepIndex) {
+      const keys = new Set();
+      for (const p of puzzles) {
+        if ((p.team_id === teamId || p.team_id === null) && p.order_index < stepIndex && p.location_key) {
+          keys.add(p.location_key);
+        }
+      }
+      return keys;
+    }
+
     async function draw() {
       const { data: rows } = await client.from("team_progress").select("team_id, current_index");
       const byTeam = Object.fromEntries((rows || []).map(r => [r.team_id, r.current_index]));
+      const myStep = byTeam[myTeamId] ?? 1;
+      const myKnownLocations = knownLocationsFor(myTeamId, myStep);
+
       rowsEl.innerHTML = teams.map(t => {
         const stepRaw = byTeam[t.id] ?? 1;
         const step = Math.min(stepRaw, TOTAL_STEPS);
         const pct = Math.round((Math.min(stepRaw - 1, TOTAL_STEPS) / TOTAL_STEPS) * 100);
         const label = stepRaw > TOTAL_STEPS ? "Done" : `${step}/${TOTAL_STEPS}`;
+
+        let hint = "";
+        if (stepRaw <= TOTAL_STEPS) {
+          const targetPuzzle = currentPuzzleFor(t.id, stepRaw);
+          const alreadyKnown = targetPuzzle && targetPuzzle.location_key && myKnownLocations.has(targetPuzzle.location_key);
+          if (alreadyKnown && targetPuzzle.location_name) {
+            hint = `<div class="progress-hint">📍 ${targetPuzzle.location_name}</div>`;
+          }
+        }
+
         return `
           <div class="progress-row">
             <div class="progress-name">${t.name}</div>
-            <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+            <div class="progress-main">
+              <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
+              ${hint}
+            </div>
             <div class="progress-count">${label}</div>
           </div>
         `;

@@ -12,21 +12,23 @@ insert into team_progress (team_id, current_index) values
   ('team3', 1)
 on conflict (team_id) do nothing;
 
--- Steps specific to each team
-insert into puzzles (team_id, order_index, title, riddle_text, location_hint, code, unlock_text)
+delete from puzzles;
+
+insert into puzzles (team_id, order_index, title, riddle_text, location_hint, location_name, location_key, code, unlock_text)
 select t.id, s.order_index, 'Step ' || s.order_index,
-       '[Puzzle text TBD]', '[Location TBD]',
+       '[Puzzle text TBD]', '[Clue TBD]', '[Real location TBD]',
+       t.id || '-' || s.order_index,
        'CODE' || s.order_index || '-' || t.id,
        'Nice, now head towards the next step!'
 from teams t
 cross join (values (1),(2),(3),(5),(6),(8),(10)) as s(order_index);
 
 -- Crossover steps
-insert into puzzles (team_id, order_index, title, riddle_text, location_hint, code, unlock_text)
+insert into puzzles (team_id, order_index, title, riddle_text, location_hint, location_name, location_key, code, unlock_text)
 values
-  (null, 4, 'Step 4 - Crossover', '[Puzzle text TBD]', '[Location TBD]', 'CROSSOVER-4', 'Nice, now head towards the next step!'),
-  (null, 7, 'Step 7 - Crossover', '[Puzzle text TBD]', '[Location TBD]', 'CROSSOVER-7', 'Nice, now head towards the next step!'),
-  (null, 9, 'Step 9 - Crossover', '[Puzzle text TBD]', '[Location TBD]', 'CROSSOVER-9', 'Nice, now head towards the next step!');
+  (null, 4, 'Step 4 - Crossover', '[Puzzle text TBD]', '[Clue TBD]', '[Real location TBD]', 'crossover-4', 'CROSSOVER-4', 'Nice, now head towards the next step!'),
+  (null, 7, 'Step 7 - Crossover', '[Puzzle text TBD]', '[Clue TBD]', '[Real location TBD]', 'crossover-7', 'CROSSOVER-7', 'Nice, now head towards the next step!'),
+  (null, 9, 'Step 9 - Crossover', '[Puzzle text TBD]', '[Clue TBD]', '[Real location TBD]', 'crossover-9', 'CROSSOVER-9', 'Nice, now head towards the next step!');
 
 -- Final step (10): dinner!
 update puzzles set unlock_text = 'Nice, the rest of the team is waiting for you for dinner!'
