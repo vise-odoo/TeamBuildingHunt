@@ -209,19 +209,25 @@
       const myStep = byTeam[myTeamId] ?? 1;
       const myKnownLocationIds = knownLocationIdsFor(myTeamId, myStep);
 
+      function labelFor(route) {
+        if (!route) return "Start";
+        const known = myKnownLocationIds.has(route.location_id);
+        return known && route.location && route.location.location_name
+          ? route.location.location_name
+          : "???";
+      }
+
       rowsEl.innerHTML = teams.map(t => {
         const stepRaw = byTeam[t.id] ?? 1;
         const step = Math.min(stepRaw, TOTAL_STEPS);
         const pct = Math.round((Math.min(stepRaw - 1, TOTAL_STEPS) / TOTAL_STEPS) * 100);
         const label = stepRaw > TOTAL_STEPS ? "Done" : `${step}/${TOTAL_STEPS}`;
 
-        let hint = "";
+        let trail = "";
         if (stepRaw <= TOTAL_STEPS) {
-          const targetRoute = currentRouteFor(t.id, stepRaw);
-          const alreadyKnown = targetRoute && myKnownLocationIds.has(targetRoute.location_id);
-          if (alreadyKnown && targetRoute.location && targetRoute.location.location_name) {
-            hint = `<div class="progress-hint">📍 ${targetRoute.location.location_name}</div>`;
-          }
+          const prevRoute = stepRaw > 1 ? currentRouteFor(t.id, stepRaw - 1) : null;
+          const currRoute = currentRouteFor(t.id, stepRaw);
+          trail = `<div class="progress-trail">${labelFor(prevRoute)} → ${labelFor(currRoute)}</div>`;
         }
 
         return `
@@ -229,7 +235,7 @@
             <div class="progress-name">${t.name}</div>
             <div class="progress-main">
               <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
-              ${hint}
+              ${trail}
             </div>
             <div class="progress-count">${label}</div>
           </div>
