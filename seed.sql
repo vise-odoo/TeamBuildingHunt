@@ -1,8 +1,5 @@
 -- Seed data: teams + starting progress.
 --
--- Puzzle content (locations) and each team's route + codes are filled in
--- separately, via CSV import into the `locations` and `team_routes`
--- tables — see locations_template.csv and routes_template.csv.
 
 insert into teams (id, name) values
   ('team1', 'Team 1'),

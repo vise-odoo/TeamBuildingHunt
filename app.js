@@ -5,7 +5,7 @@
 
   const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   const TEAM_KEY = "team-hunt:team_id";
-  const TOTAL_STEPS = 10;
+  const TOTAL_STEPS = 11; // last step (11) is the shared dinner spot
 
   const app = document.getElementById("app");
   const nav = document.getElementById("nav");
@@ -88,8 +88,8 @@
       app.innerHTML = `
         <div class="card">
           <p class="eyebrow">Route complete</p>
-          <h2>Head to dinner!</h2>
-          <p>All puzzles solved — well done, team!</p>
+          <h2>You made it!</h2>
+          <p>All steps solved, dinner included — well done, team!</p>
         </div>
       `;
       return;
@@ -97,7 +97,7 @@
 
     const { data: route, error: routeError } = await client
       .from("team_routes")
-      .select("code, location:locations(title, riddle_text, location_hint, image_url)")
+      .select("location:locations(title, riddle_text, location_hint, image_url)")
       .eq("team_id", teamId)
       .eq("order_index", step)
       .maybeSingle();
@@ -132,31 +132,23 @@
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const entered = input.value.trim().toUpperCase();
-      const expected = route.code.trim().toUpperCase();
       if (!entered) return;
 
-      if (entered !== expected) {
-        feedback.innerHTML = `<p class="feedback error">Incorrect code, try again.</p>`;
+      submitBtn.disabled = true;
+      const { data: solved, error: rpcError } = await client.rpc("check_step_code", {
+        p_team_id: teamId,
+        p_order_index: step,
+        p_code: entered,
+      });
+
+      if (rpcError) {
+        feedback.innerHTML = `<p class="feedback error">Unstable connection, try again.</p>`;
+        submitBtn.disabled = false;
         return;
       }
 
-      submitBtn.disabled = true;
-      const { data: current } = await client
-        .from("team_progress")
-        .select("history")
-        .eq("team_id", teamId)
-        .single();
-
-      const history = (current && current.history) || [];
-      history.push({ order_index: step, solved_at: new Date().toISOString() });
-
-      const { error: updateError } = await client
-        .from("team_progress")
-        .update({ current_index: step + 1, history, updated_at: new Date().toISOString() })
-        .eq("team_id", teamId);
-
-      if (updateError) {
-        feedback.innerHTML = `<p class="feedback error">Unstable connection, try again.</p>`;
+      if (!solved) {
+        feedback.innerHTML = `<p class="feedback error">Incorrect code, try again.</p>`;
         submitBtn.disabled = false;
         return;
       }
@@ -172,7 +164,9 @@
 
     const [{ data: teams, error: teamsError }, { data: routes, error: routesError }] = await Promise.all([
       client.from("teams").select("id, name").order("id"),
-      client.from("team_routes").select("team_id, order_index, location_id, location:locations(location_name)"),
+      client
+        .from("team_routes")
+        .select("team_id, location_id, order_index, fragment, location:locations(location_name)"),
     ]);
     if (teamsError || routesError) {
       app.innerHTML = `<div class="card"><p class="feedback error">Couldn't load the progress.</p></div>`;
@@ -185,34 +179,46 @@
         <h2>Team progress</h2>
         <div id="progress-rows"></div>
       </div>
+      <div class="card">
+        <p class="eyebrow">Report back</p>
+        <h2>Shared clues</h2>
+        <p class="muted">Each team reveals its piece here as soon as it clears a shared stop.</p>
+        <div id="shared-clues"></div>
+      </div>
     `;
 
     const rowsEl = document.getElementById("progress-rows");
+    const sharedEl = document.getElementById("shared-clues");
+
+    // Checkpoints every team visits (same location_id across all teams),
+    // used to pool clue fragments regardless of the viewer's own progress:
+    // the point is for teams to report back to each other, not to gate on
+    // what the viewer has personally reached yet.
+    const byLocation = {};
+    routes.forEach(r => {
+      if (!r.location_id) return;
+      (byLocation[r.location_id] ||= []).push(r);
+    });
+    const sharedGroups = Object.values(byLocation).filter(group => group.length === teams.length);
 
     function currentRouteFor(teamId, stepIndex) {
       return routes.find(r => r.team_id === teamId && r.order_index === stepIndex);
-    }
-
-    function knownLocationIdsFor(teamId, stepIndex) {
-      const ids = new Set();
-      for (const r of routes) {
-        if (r.team_id === teamId && r.order_index < stepIndex) {
-          ids.add(r.location_id);
-        }
-      }
-      return ids;
     }
 
     async function draw() {
       const { data: rows } = await client.from("team_progress").select("team_id, current_index");
       const byTeam = Object.fromEntries((rows || []).map(r => [r.team_id, r.current_index]));
       const myStep = byTeam[myTeamId] ?? 1;
-      const myKnownLocationIds = knownLocationIdsFor(myTeamId, myStep);
 
+      // Reveal a step's location as soon as my own team has gone further
+      // than it — regardless of whether it's the same physical spot as
+      // any of my own steps. A team's own current (unsolved) step is
+      // never revealed, since its order_index always equals myStep, not
+      // less than it.
       function labelFor(route) {
         if (!route) return "Start";
-        const known = myKnownLocationIds.has(route.location_id);
-        return known && route.location && route.location.location_name
+        const visible = route.order_index < myStep;
+        return visible && route.location && route.location.location_name
           ? route.location.location_name
           : "???";
       }
@@ -238,6 +244,27 @@
               ${trail}
             </div>
             <div class="progress-count">${label}</div>
+          </div>
+        `;
+      }).join("");
+
+      sharedEl.innerHTML = sharedGroups.map(group => {
+        const name = (group[0].location && group[0].location.location_name) || "Shared stop";
+        const teamCells = group.map(r => {
+          const team = teams.find(t => t.id === r.team_id);
+          const solved = (byTeam[r.team_id] ?? 1) > r.order_index;
+          const value = solved ? (r.fragment || "—") : "🔒";
+          return `
+            <div class="shared-clue-team">
+              <span>${team ? team.name : r.team_id}</span>
+              <span>${value}</span>
+            </div>
+          `;
+        }).join("");
+        return `
+          <div class="shared-clue">
+            <div class="shared-clue-name">${name}</div>
+            ${teamCells}
           </div>
         `;
       }).join("");

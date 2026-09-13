@@ -1,0 +1,5 @@
+# Real hunt data (answer codes) — never committed in plaintext.
+# See data/*.csv.enc (encrypted) and scripts/encrypt-data.sh.
+data/locations.csv
+data/routes.csv
+.env
