@@ -9,15 +9,14 @@ riddle text, hints, and images are.
 
 ## One-time project setup
 
-1. In the Supabase project's SQL Editor, run `schema.sql`, then `seed.sql`
-   (creates the 3 teams and their starting progress).
+1. Create a Supabase project.
 2. In the GitHub repo settings, there are Actions secrets:
    - `SUPABASE_DB_URL`: the project's direct Postgres connection string
      (Project Settings → Database → Connection string).
    - `DATA_KEY`: a passphrase used to encrypt/decrypt the real location and
      route data (pick anything, keep it out of git — e.g. a password manager).
 
-## Updating locations / routes (real answer codes)
+## Updating locations & routes
 
 The real data lives in `data/locations.csv` and `data/routes.csv`, which are
 **gitignored** — only their encrypted form (`data/*.csv.enc`) is committed, so
@@ -28,8 +27,8 @@ the public repo never contains plaintext answer codes.
    the column layout with codes left blank).
 2. Edit `data/locations.csv` / `data/routes.csv`.
 3. `DATA_KEY=... ./scripts/encrypt-data.sh` to regenerate the `.enc` files.
-4. Commit and push the `.enc` files (never the plaintext `.csv` ones — they're
-   gitignored on purpose).
+
+## Real-time updates
 
 Pushing to `main` with changes under `schema.sql`, `seed.sql` or `data/**`
 triggers `.github/workflows/deploy-db.yml`, which decrypts the data and

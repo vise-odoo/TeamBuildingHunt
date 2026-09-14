@@ -5,29 +5,87 @@
 
   const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   const TEAM_KEY = "team-hunt:team_id";
+  const CHAT_READ_KEY = "team-hunt:chat_last_read";
   const TOTAL_STEPS = 11; // last step (11) is the shared dinner spot
 
   const app = document.getElementById("app");
   const nav = document.getElementById("nav");
   const navHunt = document.getElementById("nav-hunt");
   const navProgress = document.getElementById("nav-progress");
+  const navChat = document.getElementById("nav-chat");
+  const chatBadge = document.getElementById("chat-badge");
 
   let currentView = "hunt";
   let progressChannel = null;
+  let chatChannel = null;
 
   navHunt.addEventListener("click", () => switchView("hunt"));
   navProgress.addEventListener("click", () => switchView("progress"));
+  navChat.addEventListener("click", () => switchView("chat"));
 
   function switchView(view) {
     currentView = view;
     navHunt.setAttribute("aria-current", String(view === "hunt"));
     navProgress.setAttribute("aria-current", String(view === "progress"));
+    navChat.setAttribute("aria-current", String(view === "chat"));
     if (view === "hunt") renderHunt();
-    else renderProgressView();
+    else if (view === "progress") renderProgressView();
+    else renderChatView();
   }
 
   function getMyTeamId() {
     return localStorage.getItem(TEAM_KEY);
+  }
+
+  let teamsCache = null;
+  async function getTeams() {
+    if (!teamsCache) {
+      const { data } = await client.from("teams").select("id, name").order("id");
+      teamsCache = data || [];
+    }
+    return teamsCache;
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function getLastRead() {
+    return localStorage.getItem(CHAT_READ_KEY) || new Date(0).toISOString();
+  }
+
+  function markChatRead(timestamp) {
+    localStorage.setItem(CHAT_READ_KEY, timestamp);
+    chatBadge.hidden = true;
+  }
+
+  async function refreshChatBadge() {
+    const myTeamId = getMyTeamId();
+    const { data } = await client
+      .from("messages")
+      .select("id")
+      .gt("created_at", getLastRead())
+      .neq("team_id", myTeamId)
+      .limit(1);
+    chatBadge.hidden = !(data && data.length);
+  }
+
+  function subscribeChat() {
+    if (chatChannel) return;
+    chatChannel = client
+      .channel("chat-live")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
+        const msg = payload.new;
+        if (currentView === "chat") {
+          appendChatMessage(msg);
+          markChatRead(msg.created_at);
+        } else if (msg.team_id !== getMyTeamId()) {
+          chatBadge.hidden = false;
+        }
+      })
+      .subscribe();
   }
 
   async function init() {
@@ -36,6 +94,9 @@
       await renderTeamPicker();
     } else {
       nav.hidden = false;
+      getTeams();
+      subscribeChat();
+      refreshChatBadge();
       renderHunt();
     }
   }
@@ -48,6 +109,7 @@
       app.innerHTML = `<div class="card"><p class="feedback error">Couldn't load the teams. Check your connection and reload the page.</p></div>`;
       return;
     }
+    teamsCache = teams;
     app.innerHTML = `
       <div class="card">
         <p class="eyebrow">Before you start</p>
@@ -62,6 +124,8 @@
       btn.addEventListener("click", () => {
         localStorage.setItem(TEAM_KEY, btn.dataset.id);
         nav.hidden = false;
+        subscribeChat();
+        refreshChatBadge();
         renderHunt();
       });
     });
@@ -254,6 +318,65 @@
         if (currentView === "progress") draw();
       })
       .subscribe();
+  }
+
+  function nameForTeam(teamId) {
+    const team = (teamsCache || []).find(t => t.id === teamId);
+    return team ? team.name : teamId;
+  }
+
+  function appendChatMessage(msg) {
+    const log = document.getElementById("chat-log");
+    if (!log) return;
+    const div = document.createElement("div");
+    div.className = "chat-msg" + (msg.team_id === getMyTeamId() ? " mine" : "");
+    div.innerHTML = `
+      <span class="chat-meta">${escapeHtml(nameForTeam(msg.team_id))}</span>
+      <p>${escapeHtml(msg.body)}</p>
+    `;
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  async function renderChatView() {
+    app.innerHTML = `<div class="center-note">Loading chat…</div>`;
+    await getTeams();
+
+    const { data: messages, error } = await client
+      .from("messages")
+      .select("id, team_id, body, created_at")
+      .order("created_at", { ascending: true })
+      .limit(200);
+
+    if (error) {
+      app.innerHTML = `<div class="card"><p class="feedback error">Couldn't load the chat.</p></div>`;
+      return;
+    }
+
+    app.innerHTML = `
+      <div class="card">
+        <p class="eyebrow">All teams</p>
+        <h2>Chat</h2>
+        <div id="chat-log" class="chat-log"></div>
+        <form id="chat-form" class="chat-form">
+          <input type="text" id="chat-input" placeholder="Message the other teams…" autocomplete="off" maxlength="500" required />
+          <button type="submit" class="primary">Send</button>
+        </form>
+      </div>
+    `;
+
+    (messages || []).forEach(appendChatMessage);
+    markChatRead(messages && messages.length ? messages[messages.length - 1].created_at : new Date().toISOString());
+
+    const form = document.getElementById("chat-form");
+    const input = document.getElementById("chat-input");
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const body = input.value.trim();
+      if (!body) return;
+      input.value = "";
+      await client.from("messages").insert({ team_id: getMyTeamId(), body });
+    });
   }
 
   init();

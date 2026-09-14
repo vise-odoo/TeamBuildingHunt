@@ -21,6 +21,13 @@ create table if not exists locations (
   image_url text -- optional photo clue (link to an externally hosted image)
 );
 
+create table if not exists messages (
+  id uuid primary key default gen_random_uuid(),
+  team_id text not null references teams(id),
+  body text not null check (char_length(body) <= 500),
+  created_at timestamptz not null default now()
+);
+
 create table if not exists team_routes (
   team_id text references teams(id),
   location_id text references locations(id),
@@ -38,6 +45,7 @@ alter table teams enable row level security;
 alter table locations enable row level security;
 alter table team_routes enable row level security;
 alter table team_progress enable row level security;
+alter table messages enable row level security;
 
 drop policy if exists "teams_public_read" on teams;
 create policy "teams_public_read" on teams
@@ -55,6 +63,14 @@ drop policy if exists "progress_public_read" on team_progress;
 create policy "progress_public_read" on team_progress
   for select using (true);
 
+drop policy if exists "messages_public_read" on messages;
+create policy "messages_public_read" on messages
+  for select using (true);
+
+drop policy if exists "messages_public_insert" on messages;
+create policy "messages_public_insert" on messages
+  for insert with check (true);
+
 drop policy if exists "progress_public_update" on team_progress;
 revoke update on team_progress from anon, authenticated;
 revoke select on team_routes from anon, authenticated;
@@ -64,6 +80,7 @@ grant select on teams to anon, authenticated;
 grant select on locations to anon, authenticated;
 grant select (team_id, location_id, order_index, fragment, fragment_for) on team_routes to anon, authenticated;
 grant select on team_progress to anon, authenticated;
+grant select, insert on messages to anon, authenticated;
 
 do $$
 begin
@@ -72,6 +89,12 @@ begin
     where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'team_progress'
   ) then
     alter publication supabase_realtime add table team_progress;
+  end if;
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'messages'
+  ) then
+    alter publication supabase_realtime add table messages;
   end if;
 end $$;
 
