@@ -26,7 +26,8 @@ create table if not exists team_routes (
   location_id text references locations(id),
   order_index int not null,
   code text not null,
-  fragment text, -- clue fragment revealed to other teams once this team solves this step (shared checkpoints only)
+  fragment text, -- clue fragment shown to this team at a shared checkpoint
+  fragment_for text references teams(id), -- which team this fragment must be handed off to
   primary key (team_id, location_id),
   unique (team_id, order_index)
 );
@@ -61,7 +62,7 @@ revoke select on team_routes from anon, authenticated;
 grant usage on schema public to anon, authenticated;
 grant select on teams to anon, authenticated;
 grant select on locations to anon, authenticated;
-grant select (team_id, location_id, order_index, fragment) on team_routes to anon, authenticated;
+grant select (team_id, location_id, order_index, fragment, fragment_for) on team_routes to anon, authenticated;
 grant select on team_progress to anon, authenticated;
 
 do $$

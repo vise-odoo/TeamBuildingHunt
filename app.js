@@ -97,7 +97,7 @@
 
     const { data: route, error: routeError } = await client
       .from("team_routes")
-      .select("location:locations(title, riddle_text, location_hint, image_url)")
+      .select("fragment, fragment_for, location:locations(title, riddle_text, location_hint, image_url)")
       .eq("team_id", teamId)
       .eq("order_index", step)
       .maybeSingle();
@@ -109,6 +109,21 @@
 
     const puzzle = route.location;
 
+    let dispatchHtml = "";
+    if (route.fragment && route.fragment_for) {
+      const { data: teams } = await client.from("teams").select("id, name").order("id");
+      const recipient = teams && teams.find(t => t.id === route.fragment_for);
+      if (recipient) {
+        dispatchHtml = `
+          <div class="dispatch">
+            <p class="eyebrow">Team dispatch</p>
+            <p>Your piece: <strong>${route.fragment}</strong></p>
+            <p class="muted">Pass it on to ${recipient.name} — they'll need it to pick their code at their next shared stop.</p>
+          </div>
+        `;
+      }
+    }
+
     app.innerHTML = `
       <div class="card">
         <p class="eyebrow">Step ${step} / ${TOTAL_STEPS}</p>
@@ -116,6 +131,7 @@
         ${puzzle.image_url ? `<img src="${puzzle.image_url}" alt="" class="puzzle-image" />` : ""}
         <p>${puzzle.riddle_text}</p>
         ${puzzle.location_hint ? `<p class="muted">${puzzle.location_hint}</p>` : ""}
+        ${dispatchHtml}
         <form id="code-form">
           <input type="text" id="code-input" placeholder="Code found on site" autocomplete="off" autocapitalize="characters" required />
           <button type="submit" class="primary">Submit</button>
@@ -164,9 +180,7 @@
 
     const [{ data: teams, error: teamsError }, { data: routes, error: routesError }] = await Promise.all([
       client.from("teams").select("id, name").order("id"),
-      client
-        .from("team_routes")
-        .select("team_id, location_id, order_index, fragment, location:locations(location_name)"),
+      client.from("team_routes").select("team_id, order_index, location:locations(location_name)"),
     ]);
     if (teamsError || routesError) {
       app.innerHTML = `<div class="card"><p class="feedback error">Couldn't load the progress.</p></div>`;
@@ -179,27 +193,9 @@
         <h2>Team progress</h2>
         <div id="progress-rows"></div>
       </div>
-      <div class="card">
-        <p class="eyebrow">Report back</p>
-        <h2>Shared clues</h2>
-        <p class="muted">Each team reveals its piece here as soon as it clears a shared stop.</p>
-        <div id="shared-clues"></div>
-      </div>
     `;
 
     const rowsEl = document.getElementById("progress-rows");
-    const sharedEl = document.getElementById("shared-clues");
-
-    // Checkpoints every team visits (same location_id across all teams),
-    // used to pool clue fragments regardless of the viewer's own progress:
-    // the point is for teams to report back to each other, not to gate on
-    // what the viewer has personally reached yet.
-    const byLocation = {};
-    routes.forEach(r => {
-      if (!r.location_id) return;
-      (byLocation[r.location_id] ||= []).push(r);
-    });
-    const sharedGroups = Object.values(byLocation).filter(group => group.length === teams.length);
 
     function currentRouteFor(teamId, stepIndex) {
       return routes.find(r => r.team_id === teamId && r.order_index === stepIndex);
@@ -244,27 +240,6 @@
               ${trail}
             </div>
             <div class="progress-count">${label}</div>
-          </div>
-        `;
-      }).join("");
-
-      sharedEl.innerHTML = sharedGroups.map(group => {
-        const name = (group[0].location && group[0].location.location_name) || "Shared stop";
-        const teamCells = group.map(r => {
-          const team = teams.find(t => t.id === r.team_id);
-          const solved = (byTeam[r.team_id] ?? 1) > r.order_index;
-          const value = solved ? (r.fragment || "—") : "🔒";
-          return `
-            <div class="shared-clue-team">
-              <span>${team ? team.name : r.team_id}</span>
-              <span>${value}</span>
-            </div>
-          `;
-        }).join("");
-        return `
-          <div class="shared-clue">
-            <div class="shared-clue-name">${name}</div>
-            ${teamCells}
           </div>
         `;
       }).join("");

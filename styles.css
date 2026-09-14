@@ -161,17 +161,15 @@ button.primary:disabled { opacity: 0.5; cursor: default; }
 .progress-trail { font-size: 0.78rem; color: var(--ink-soft); }
 .progress-count { width: 44px; text-align: right; font-size: 0.85rem; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 
-.shared-clue { padding: 10px 0; }
-.shared-clue + .shared-clue { border-top: 1px solid var(--border); }
-.shared-clue-name { font-weight: 600; font-size: 0.92rem; margin-bottom: 6px; }
-.shared-clue-team {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  font-size: 0.85rem;
-  color: var(--ink-soft);
-  padding: 2px 0;
+.dispatch {
+  margin-top: 4px;
+  padding: 12px 14px;
+  background: var(--ground);
+  border: 1px solid var(--gold);
+  border-radius: 10px;
 }
+.dispatch .eyebrow { margin-bottom: 4px; }
+.dispatch p { margin: 4px 0; }
 
 .center-note { text-align: center; padding: 40px 16px; color: var(--ink-soft); }
 [hidden] { display: none !important; }

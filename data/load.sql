@@ -29,17 +29,19 @@ create temporary table tmp_routes (
   location_id text,
   order_index int,
   code text,
-  fragment text
+  fragment text,
+  fragment_for text
 ) on commit drop;
 
 \copy tmp_routes from '/tmp/routes.csv' with (format csv, header true)
 
-insert into team_routes (team_id, location_id, order_index, code, fragment)
-select team_id, location_id, order_index, code, nullif(fragment, '')
+insert into team_routes (team_id, location_id, order_index, code, fragment, fragment_for)
+select team_id, location_id, order_index, code, nullif(fragment, ''), nullif(fragment_for, '')
 from tmp_routes
 on conflict (team_id, location_id) do update set
   order_index = excluded.order_index,
   code = excluded.code,
-  fragment = excluded.fragment;
+  fragment = excluded.fragment,
+  fragment_for = excluded.fragment_for;
 
 commit;
