@@ -224,7 +224,7 @@ button.primary:disabled { opacity: 0.5; cursor: default; }
 }
 .chat-msg p { margin: 0; color: inherit; line-height: 1.4; }
 .chat-form { margin-top: 12px; flex-direction: row; }
-.chat-form input[type="text"] { flex: 1; }
+.chat-form input[type="text"] { flex: 1; min-width: 0; }
 .chat-form button { flex-shrink: 0; padding: 0 18px; }
 
 .center-note { text-align: center; padding: 40px 16px; color: var(--ink-soft); }

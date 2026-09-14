@@ -39,6 +39,11 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f seed.sql
 
+      - name: Reset chat + progress
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: psql "$SUPABASE_DB_URL" -v ON_ERROR_STOP=1 -f data/reset.sql
+
       - name: Load locations + routes
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}

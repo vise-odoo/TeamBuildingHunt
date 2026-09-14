@@ -367,7 +367,7 @@
         <h2>Chat</h2>
         <div id="chat-log" class="chat-log"></div>
         <form id="chat-form" class="chat-form">
-          <input type="text" id="chat-input" placeholder="Message the other teams…" autocomplete="off" maxlength="500" required />
+          <input type="text" id="chat-input" placeholder="Message…" autocomplete="off" maxlength="500" required />
           <button type="submit" class="primary">Send</button>
         </form>
       </div>
