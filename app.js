@@ -56,20 +56,28 @@
     return localStorage.getItem(CHAT_READ_KEY) || new Date(0).toISOString();
   }
 
+  let unreadCount = 0;
+
+  function setChatBadge(count) {
+    unreadCount = Math.max(0, count);
+    chatBadge.textContent = unreadCount > 9 ? "9+" : String(unreadCount);
+    chatBadge.hidden = unreadCount === 0;
+    chatBadge.classList.toggle("blink", unreadCount > 0);
+  }
+
   function markChatRead(timestamp) {
     localStorage.setItem(CHAT_READ_KEY, timestamp);
-    chatBadge.hidden = true;
+    setChatBadge(0);
   }
 
   async function refreshChatBadge() {
     const myTeamId = getMyTeamId();
-    const { data } = await client
+    const { count } = await client
       .from("messages")
-      .select("id")
+      .select("id", { count: "exact", head: true })
       .gt("created_at", getLastRead())
-      .neq("team_id", myTeamId)
-      .limit(1);
-    chatBadge.hidden = !(data && data.length);
+      .neq("team_id", myTeamId);
+    setChatBadge(count || 0);
   }
 
   function subscribeChat() {
@@ -82,7 +90,7 @@
           appendChatMessage(msg);
           markChatRead(msg.created_at);
         } else if (msg.team_id !== getMyTeamId()) {
-          chatBadge.hidden = false;
+          setChatBadge(unreadCount + 1);
         }
       })
       .subscribe();
