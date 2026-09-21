@@ -200,7 +200,7 @@
       <div class="card">
         <p class="eyebrow">Step ${step} / ${TOTAL_STEPS}</p>
         <h2>${puzzle.title}</h2>
-        ${puzzle.image_url ? `<img src="${puzzle.image_url}" alt="" class="puzzle-image" />` : ""}
+        ${puzzle.image_url ? `<img crossorigin="anonymous" src="${puzzle.image_url}" alt="" class="puzzle-image" />` : ""}
         <p>${puzzle.riddle_text}</p>
         ${puzzle.location_hint ? `<p class="muted">${puzzle.location_hint}</p>` : ""}
         ${dispatchHtml}
