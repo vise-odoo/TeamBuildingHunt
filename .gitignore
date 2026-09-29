@@ -3,3 +3,5 @@
 data/locations.csv
 data/routes.csv
 .env
+data/locations.json
+data/routes.json

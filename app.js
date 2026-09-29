@@ -182,9 +182,9 @@
     const puzzle = route.location;
 
     let dispatchHtml = "";
-    if (route.fragment && route.fragment_for) {
+    if (route.fragment) {
       const { data: teams } = await client.from("teams").select("id, name").order("id");
-      const recipient = teams && teams.find(t => t.id === route.fragment_for);
+      const recipient = teams && teams.find(t => t.id === route.fragment_for) || "everybody";
       if (recipient) {
         dispatchHtml = `
           <div class="dispatch">
