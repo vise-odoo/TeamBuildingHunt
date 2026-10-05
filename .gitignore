@@ -5,3 +5,12 @@ data/routes.csv
 .env
 data/locations.json
 data/routes.json
+
+# Real secrets (DATA_KEY, SUPABASE_SERVICE_ROLE_KEY) - see config_template.ini
+# for the format; never commit the filled-in config.ini.
+config.ini
+
+# Location photos — uploaded to Supabase Storage by scripts/sync-image-urls.py,
+# never committed (large binaries; the bucket is the source of truth).
+puzzle-images/*
+!puzzle-images/.gitkeep

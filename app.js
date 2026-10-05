@@ -184,7 +184,7 @@
     let dispatchHtml = "";
     if (route.fragment) {
       const { data: teams } = await client.from("teams").select("id, name").order("id");
-      const recipient = teams && teams.find(t => t.id === route.fragment_for) || "everybody";
+      const recipient = teams && teams.find(t => t.id === route.fragment_for) || {name: "everybody"};
       if (recipient) {
         dispatchHtml = `
           <div class="dispatch">
@@ -200,8 +200,8 @@
       <div class="card">
         <p class="eyebrow">Step ${step} / ${TOTAL_STEPS}</p>
         <h2>${puzzle.title}</h2>
-        ${puzzle.image_url ? `<img crossorigin="anonymous" src="${puzzle.image_url}" alt="" class="puzzle-image" />` : ""}
         <p>${puzzle.riddle_text}</p>
+        ${puzzle.image_url ? `<img crossorigin="anonymous" src="${puzzle.image_url}" alt="" class="puzzle-image" />` : ""}
         ${puzzle.location_hint ? `<p class="muted">${puzzle.location_hint}</p>` : ""}
         ${dispatchHtml}
         <form id="code-form">

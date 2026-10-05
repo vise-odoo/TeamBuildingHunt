@@ -21,6 +21,11 @@ create table if not exists locations (
   image_url text -- optional photo clue (link to an externally hosted image)
 );
 
+-- Public bucket for photos, uploaded by scripts/sync-image-urls.py.
+insert into storage.buckets (id, name, public)
+values ('puzzle-images', 'puzzle-images', true)
+on conflict (id) do nothing;
+
 create table if not exists messages (
   id uuid primary key default gen_random_uuid(),
   team_id text not null references teams(id),
