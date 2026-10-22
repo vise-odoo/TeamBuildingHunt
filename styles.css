@@ -55,6 +55,26 @@ nav button[aria-current="true"] {
   border-color: var(--accent);
   color: var(--accent-ink);
 }
+.team-bar[hidden] { display: none; }
+.team-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+.team-bar strong { color: var(--ink); }
+.team-bar button {
+  border: none;
+  background: none;
+  color: var(--accent);
+  text-decoration: underline;
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0;
+}
 .chat-badge {
   position: absolute;
   top: -6px;

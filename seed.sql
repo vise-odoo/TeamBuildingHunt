@@ -2,9 +2,9 @@
 --
 
 insert into teams (id, name) values
-  ('team1', 'Team 1'),
-  ('team2', 'Team 2'),
-  ('team3', 'Team 3')
+  ('team1', 'Team 1: SIBL/FRAWU/IKCHA'),
+  ('team2', 'Team 2: ANDE/JOSWA/CHWAN'),
+  ('team3', 'Team 3: VISE/JOCHI/NGBRI')
 on conflict (id) do nothing;
 
 insert into team_progress (team_id, current_index) values

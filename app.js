@@ -14,6 +14,9 @@
   const navProgress = document.getElementById("nav-progress");
   const navChat = document.getElementById("nav-chat");
   const chatBadge = document.getElementById("chat-badge");
+  const teamBar = document.getElementById("team-bar");
+  const teamBarName = document.getElementById("team-bar-name");
+  const teamBarChange = document.getElementById("team-bar-change");
 
   let currentView = "hunt";
   let progressChannel = null;
@@ -22,6 +25,15 @@
   navHunt.addEventListener("click", () => switchView("hunt"));
   navProgress.addEventListener("click", () => switchView("progress"));
   navChat.addEventListener("click", () => switchView("chat"));
+  teamBarChange.addEventListener("click", () => {
+    localStorage.removeItem(TEAM_KEY);
+    currentView = "hunt";
+    navHunt.setAttribute("aria-current", "true");
+    navProgress.setAttribute("aria-current", "false");
+    navChat.setAttribute("aria-current", "false");
+    teamBar.hidden = true;
+    renderTeamPicker();
+  });
 
   function switchView(view) {
     currentView = view;
@@ -44,6 +56,15 @@
       teamsCache = data || [];
     }
     return teamsCache;
+  }
+
+  async function showTeamBar() {
+    const teams = await getTeams();
+    const myTeamId = getMyTeamId();
+    if (!myTeamId) return;
+    const team = teams.find(t => t.id === myTeamId);
+    teamBarName.textContent = team ? team.name : myTeamId;
+    teamBar.hidden = false;
   }
 
   function escapeHtml(str) {
@@ -102,7 +123,7 @@
       await renderTeamPicker();
     } else {
       nav.hidden = false;
-      getTeams();
+      showTeamBar();
       subscribeChat();
       refreshChatBadge();
       renderHunt();
@@ -132,6 +153,7 @@
       btn.addEventListener("click", () => {
         localStorage.setItem(TEAM_KEY, btn.dataset.id);
         nav.hidden = false;
+        showTeamBar();
         subscribeChat();
         refreshChatBadge();
         renderHunt();
