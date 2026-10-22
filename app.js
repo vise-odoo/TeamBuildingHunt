@@ -6,7 +6,7 @@
   const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   const TEAM_KEY = "team-hunt:team_id";
   const CHAT_READ_KEY = "team-hunt:chat_last_read";
-  const TOTAL_STEPS = 11; // last step (11) is the shared dinner spot
+  const TOTAL_STEPS = 7;
 
   const app = document.getElementById("app");
   const nav = document.getElementById("nav");
@@ -71,6 +71,16 @@
     const div = document.createElement("div");
     div.textContent = str;
     return div.innerHTML;
+  }
+
+  // HTML hack to turn [word](link) into clickable links, and to display "\n" elements properly.
+  function formatText(str) {
+    if (!str) return "";
+    const link = (url, label) => `<a href="${url}" target="_blank" rel="noopener">${label}</a>`;
+    return escapeHtml(str)
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<]+)/g,
+        (m, label, url, bare) => bare ? link(bare, "link") : link(url, label))
+      .replace(/\\n|\r?\n/g, "<br>");
   }
 
   function getLastRead() {
@@ -183,7 +193,7 @@
         <div class="card">
           <p class="eyebrow">Route complete</p>
           <h2>You made it!</h2>
-          <p>All steps solved, dinner included — well done, team!</p>
+          <p>All steps solved - well done, team! Your prize is... a company dinner!</p>
         </div>
       `;
       return;
@@ -211,8 +221,8 @@
         dispatchHtml = `
           <div class="dispatch">
             <p class="eyebrow">Team dispatch</p>
-            <p>Your piece: <strong>${route.fragment}</strong></p>
-            <p class="muted">Pass it on to ${recipient.name} — they'll need it to pick their code at their next shared stop.</p>
+            <p>Your piece: <strong>${formatText(route.fragment)}</strong></p>
+            <p class="muted">Pass it on to ${recipient.name} - they'll need it to pick their code at their next shared stop.</p>
           </div>
         `;
       }
@@ -222,9 +232,9 @@
       <div class="card">
         <p class="eyebrow">Step ${step} / ${TOTAL_STEPS}</p>
         <h2>${puzzle.title}</h2>
-        <p>${puzzle.riddle_text}</p>
+        <p>${formatText(puzzle.riddle_text)}</p>
         ${puzzle.image_url ? `<img crossorigin="anonymous" src="${puzzle.image_url}" alt="" class="puzzle-image" />` : ""}
-        ${puzzle.location_hint ? `<p class="muted">${puzzle.location_hint}</p>` : ""}
+        ${puzzle.location_hint ? `<p class="muted">${formatText(puzzle.location_hint)}</p>` : ""}
         ${dispatchHtml}
         <form id="code-form">
           <input type="text" id="code-input" placeholder="Code found on site" autocomplete="off" autocapitalize="characters" required />
@@ -301,7 +311,7 @@
       const myStep = byTeam[myTeamId] ?? 1;
 
       // Reveal a step's location as soon as my own team has gone further
-      // than it — regardless of whether it's the same physical spot as
+      // than it - regardless of whether it's the same physical spot as
       // any of my own steps. A team's own current (unsolved) step is
       // never revealed, since its order_index always equals myStep, not
       // less than it.
@@ -328,7 +338,7 @@
 
         return `
           <div class="progress-row">
-            <div class="progress-name">${t.name}</div>
+            <div class="progress-name" title="${escapeHtml(t.name)}">${escapeHtml(shortTeamName(t.name))}</div>
             <div class="progress-main">
               <div class="progress-track"><div class="progress-fill" style="width:${pct}%"></div></div>
               ${trail}
@@ -350,6 +360,10 @@
       .subscribe();
   }
 
+  function shortTeamName(name) {
+    return String(name).split(":")[0].trim();
+  }
+
   function nameForTeam(teamId) {
     const team = (teamsCache || []).find(t => t.id === teamId);
     return team ? team.name : teamId;
@@ -361,7 +375,7 @@
     const div = document.createElement("div");
     div.className = "chat-msg" + (msg.team_id === getMyTeamId() ? " mine" : "");
     div.innerHTML = `
-      <span class="chat-meta">${escapeHtml(nameForTeam(msg.team_id))}</span>
+      <span class="chat-meta" title="${escapeHtml(nameForTeam(msg.team_id))}">${escapeHtml(shortTeamName(nameForTeam(msg.team_id)))}</span>
       <p>${escapeHtml(msg.body)}</p>
     `;
     log.appendChild(div);

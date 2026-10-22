@@ -1,4 +1,4 @@
-# Real hunt data (answer codes) — never committed in plaintext.
+# Real hunt data (answer codes) - never committed in plaintext.
 # See data/*.csv.enc (encrypted) and scripts/encrypt-data.sh.
 data/locations.csv
 data/routes.csv
@@ -10,7 +10,7 @@ data/routes.json
 # for the format; never commit the filled-in config.ini.
 config.ini
 
-# Location photos — uploaded to Supabase Storage by scripts/sync-image-urls.py,
+# Location photos - uploaded to Supabase Storage by scripts/sync-image-urls.py,
 # never committed (large binaries; the bucket is the source of truth).
 puzzle-images/*
 !puzzle-images/.gitkeep
