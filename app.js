@@ -21,6 +21,8 @@
   let currentView = "hunt";
   let progressChannel = null;
   let chatChannel = null;
+  let myProgressChannel = null;
+  let shownStep = null;
 
   navHunt.addEventListener("click", () => switchView("hunt"));
   navProgress.addEventListener("click", () => switchView("progress"));
@@ -83,6 +85,45 @@
       .replace(/\\n|\r?\n/g, "<br>");
   }
 
+  // Gives a ranking of the Teams depending on the Solo Steps
+  function soloResults(progressRows, routes) {
+    const results = (progressRows || []).map(r => {
+      const solvedAt = {};
+      (r.history || []).forEach(h => { solvedAt[h.order_index] = new Date(h.solved_at); });
+      const soloSteps = (routes || [])
+        .filter(rt => rt.team_id === r.team_id && !rt.fragment && rt.order_index > 1)
+        .map(rt => rt.order_index);
+      let ms = 0;
+      let complete = soloSteps.length > 0;
+      soloSteps.forEach(k => {
+        if (solvedAt[k] && solvedAt[k - 1]) ms += solvedAt[k] - solvedAt[k - 1];
+        else complete = false;
+      });
+      const last = (r.history || []).find(h => h.order_index === TOTAL_STEPS);
+      const finishedAt = r.current_index > TOTAL_STEPS ? new Date(last ? last.solved_at : r.updated_at) : null;
+      return { teamId: r.team_id, ms, complete, finishedAt };
+    });
+    results
+      .filter(r => r.complete)
+      .sort((a, b) => a.ms - b.ms)
+      .forEach((r, i) => { r.place = i + 1; });
+    return Object.fromEntries(results.map(r => [r.teamId, r]));
+  }
+
+  function formatDuration(ms) {
+    const minutes = Math.round(ms / 60000);
+    const h = Math.floor(minutes / 60);
+    return h ? `${h}h ${String(minutes % 60).padStart(2, "0")}m` : `${minutes}m`;
+  }
+
+  function ordinal(n) {
+    return n + ({ 1: "st", 2: "nd", 3: "rd" }[n] || "th");
+  }
+
+  function formatClock(date) {
+    return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  }
+
   function getLastRead() {
     return localStorage.getItem(CHAT_READ_KEY) || new Date(0).toISOString();
   }
@@ -111,6 +152,40 @@
     setChatBadge(count || 0);
   }
 
+  async function fetchMyStep() {
+    const { data, error } = await client
+      .from("team_progress")
+      .select("current_index")
+      .eq("team_id", getMyTeamId())
+      .single();
+    return error ? null : data.current_index;
+  }
+
+  // Re-render the hunt view if the team moved on from another phone.
+  async function syncHuntStep() {
+    if (currentView !== "hunt" || !getMyTeamId()) return;
+    const step = await fetchMyStep();
+    if (step !== null && step !== shownStep) renderHunt();
+  }
+
+  function subscribeMyProgress() {
+    if (myProgressChannel) return;
+    myProgressChannel = client
+      .channel("my-progress-live")
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "team_progress" }, (payload) => {
+        const row = payload.new;
+        if (currentView === "hunt" && row.team_id === getMyTeamId() && row.current_index !== shownStep) {
+          renderHunt();
+        }
+      })
+      .subscribe();
+  }
+
+  // Phones drop the live connection while locked: catch up when back.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") syncHuntStep();
+  });
+
   function subscribeChat() {
     if (chatChannel) return;
     chatChannel = client
@@ -135,6 +210,7 @@
       nav.hidden = false;
       showTeamBar();
       subscribeChat();
+      subscribeMyProgress();
       refreshChatBadge();
       renderHunt();
     }
@@ -165,6 +241,7 @@
         nav.hidden = false;
         showTeamBar();
         subscribeChat();
+        subscribeMyProgress();
         refreshChatBadge();
         renderHunt();
       });
@@ -187,12 +264,19 @@
     }
 
     const step = progress.current_index;
+    shownStep = step;
 
     if (step > TOTAL_STEPS) {
+      const [{ data: rows }, { data: routes }] = await Promise.all([
+        client.from("team_progress").select("team_id, current_index, history, updated_at"),
+        client.from("team_routes").select("team_id, order_index, fragment"),
+      ]);
+      const mine = soloResults(rows, routes)[teamId];
       app.innerHTML = `
         <div class="card">
           <p class="eyebrow">Route complete</p>
           <h2>You made it!</h2>
+          ${mine && mine.place ? `<p><strong>Solo puzzles: ${formatDuration(mine.ms)} - ${ordinal(mine.place)} fastest so far.</strong></p>` : ""}
           <p>All steps solved - well done, team! Your prize is... a company dinner!</p>
         </div>
       `;
@@ -268,12 +352,21 @@
       }
 
       if (!solved) {
+        const currentStep = await fetchMyStep();
+        if (currentStep !== null && currentStep !== step) {
+          feedback.innerHTML = `<p class="feedback success">Your team already solved this step on another phone, moving on!</p>`;
+          shownStep = currentStep;
+          setTimeout(renderHunt, 1500);
+          return;
+        }
         feedback.innerHTML = `<p class="feedback error">Incorrect code, try again.</p>`;
         submitBtn.disabled = false;
         return;
       }
 
       feedback.innerHTML = `<p class="feedback success">Nice, on to the next step!</p>`;
+      // Keep the live update from cutting this message short.
+      shownStep = step + 1;
       setTimeout(renderHunt, 900);
     });
   }
@@ -284,7 +377,7 @@
 
     const [{ data: teams, error: teamsError }, { data: routes, error: routesError }] = await Promise.all([
       client.from("teams").select("id, name").order("id"),
-      client.from("team_routes").select("team_id, order_index, location:locations(location_name)"),
+      client.from("team_routes").select("team_id, order_index, fragment, location:locations(location_name)"),
     ]);
     if (teamsError || routesError) {
       app.innerHTML = `<div class="card"><p class="feedback error">Couldn't load the progress.</p></div>`;
@@ -306,15 +399,11 @@
     }
 
     async function draw() {
-      const { data: rows } = await client.from("team_progress").select("team_id, current_index");
+      const { data: rows } = await client.from("team_progress").select("team_id, current_index, history, updated_at");
+      const results = soloResults(rows, routes);
       const byTeam = Object.fromEntries((rows || []).map(r => [r.team_id, r.current_index]));
       const myStep = byTeam[myTeamId] ?? 1;
 
-      // Reveal a step's location as soon as my own team has gone further
-      // than it - regardless of whether it's the same physical spot as
-      // any of my own steps. A team's own current (unsolved) step is
-      // never revealed, since its order_index always equals myStep, not
-      // less than it.
       function labelFor(route) {
         if (!route) return "Start";
         const visible = route.order_index < myStep;
@@ -334,6 +423,10 @@
           const prevRoute = stepRaw > 1 ? currentRouteFor(t.id, stepRaw - 1) : null;
           const currRoute = currentRouteFor(t.id, stepRaw);
           trail = `<div class="progress-trail">${labelFor(prevRoute)} → ${labelFor(currRoute)}</div>`;
+        } else if (results[t.id]) {
+          const r = results[t.id];
+          const solo = r.place ? ` · solo ${formatDuration(r.ms)} (${ordinal(r.place)})` : "";
+          trail = `<div class="progress-trail">Finished at ${formatClock(r.finishedAt)}${solo}</div>`;
         }
 
         return `
